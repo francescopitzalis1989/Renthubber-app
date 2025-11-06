@@ -1,0 +1,5 @@
+{
+  "name": "Copycopy of Renthubber",
+  "description": "Un'applicazione per il noleggio di attrezzature che mostra articoli in affitto e utilizza Gemini per generare idee per progetti. Gli utenti possono sfogliare articoli, filtrare per categoria e ottenere idee personalizzate per i loro progetti.",
+  "requestFramePermissions": []
+}
