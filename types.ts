@@ -139,6 +139,10 @@ export interface User {
 // --- TIPI PER NOLEGGI, CHAT, DISPUTE ---
 
 export enum BookingStatus {
+  PAYMENT_PENDING = 'PAYMENT_PENDING',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
+  PAYMENT_SUCCEEDED = 'PAYMENT_SUCCEEDED',
+  DEPOSIT_AUTHORIZED = 'DEPOSIT_AUTHORIZED',
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
   PICKED_UP = 'PICKED_UP', // Ritiro confermato, timer parte
@@ -345,4 +349,60 @@ export interface AutomatedEmail {
     includeLogo: boolean;
     isActive: boolean;
     availableVariables: string[];
+}
+
+export interface PaymentSettings {
+  mode: 'test' | 'live';
+  currency: 'EUR' | 'USD';
+  supported_currencies: ('EUR' | 'USD')[];
+  stripe: {
+    enabled: boolean;
+    publishableKey: string;
+    secretKey: string; // Will be masked/encrypted
+    webhookSecret: string; // Will be masked/encrypted
+    enableKlarna: boolean;
+    klarnaAllowedCountries: ('IT' | 'DE' | 'SE')[];
+  };
+  paypal: {
+    enabled: boolean;
+    clientId: string;
+    clientSecret: string; // Will be masked/encrypted
+    webhookId: string;
+  };
+  deposits: {
+    enabled: boolean;
+    holdMethod: 'authorization';
+    autoReleaseOnReturn: boolean;
+    maxHoldDays: number;
+  };
+  timers: {
+    reminderHoursBeforeDue: number;
+    graceMinutes: number;
+    roundToMinutes: number;
+  };
+}
+
+// FIX: Export the PublicPaymentSettings type.
+export interface PublicPaymentSettings {
+  mode: 'test' | 'live';
+  currency: 'EUR' | 'USD';
+  stripe: {
+    enabled: boolean;
+    enableKlarna: boolean;
+  };
+  paypal: {
+    enabled: boolean;
+  };
+  deposits: {
+    enabled: boolean;
+  };
+}
+
+export interface WebhookEvent {
+  id: string;
+  provider: 'Stripe' | 'PayPal';
+  eventType: string;
+  timestamp: string;
+  status: 'succeeded' | 'failed' | 'processing';
+  relatedId: string; // E.g., orderId, sessionId
 }

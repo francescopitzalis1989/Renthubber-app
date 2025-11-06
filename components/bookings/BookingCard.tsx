@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import type { Booking, UserRole } from '../../types';
 import { BookingStatus } from '../../types';
@@ -14,6 +15,10 @@ interface BookingCardProps {
 
 const getStatusInfo = (status: BookingStatus) => {
     const statusMap: { [key in BookingStatus]: { text: string; className: string } } = {
+        [BookingStatus.PAYMENT_PENDING]: { text: 'Pagamento in corso...', className: 'bg-orange-100 text-orange-800' },
+        [BookingStatus.PAYMENT_FAILED]: { text: 'Pagamento Fallito', className: 'bg-red-200 text-red-900' },
+        [BookingStatus.PAYMENT_SUCCEEDED]: { text: 'In Elaborazione', className: 'bg-blue-100 text-blue-800' },
+        [BookingStatus.DEPOSIT_AUTHORIZED]: { text: 'In Finalizzazione', className: 'bg-blue-100 text-blue-800' },
         [BookingStatus.PENDING]: { text: 'In attesa', className: 'bg-yellow-100 text-yellow-800' },
         [BookingStatus.CONFIRMED]: { text: 'Confermata', className: 'bg-green-100 text-green-800' },
         [BookingStatus.PICKED_UP]: { text: 'In corso', className: 'bg-blue-100 text-blue-800' },

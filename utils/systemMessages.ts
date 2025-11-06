@@ -13,6 +13,10 @@ export const getMessageForEvent = (event: BookingEvent, viewerRole: UserRole): {
             return { icon: '📩', text: `${actorName} ha richiesto di noleggiare questo articolo.` };
         case 'BOOKING_PREAPPROVED':
             return { icon: '✅', text: 'Hai pre-approvato la richiesta. In attesa della conferma del renter.' };
+        case 'PAYMENT_SUCCEEDED':
+            return { icon: '✅', text: 'Pagamento Riuscito. In attesa di autorizzazione del deposito.' };
+        case 'DEPOSIT_AUTHORIZED':
+            return { icon: '💳', text: 'Deposito autorizzato. Finalizzazione in corso.' };
         case 'BOOKING_APPROVED':
         case 'CONFIRM_BOOKING':
             return { icon: '🟢', text: 'Prenotazione confermata.' };
@@ -32,11 +36,19 @@ export const getMessageForEvent = (event: BookingEvent, viewerRole: UserRole): {
         case 'GRACE_ENDED':
             return { icon: '⚠️', text: 'La tolleranza è terminata. Puoi estendere il noleggio a pagamento.' };
         case 'DELIVERED_BY_RENTER':
-            return { icon: '📦', text: 'Consegna dichiarata dal renter.' };
+            return { icon: '📦', text: 'Il Renter ha contrassegnato l\'oggetto come restituito. Attendi la conferma del Hubber.' };
         case 'RETURN_CONFIRMED_BY_HUBBER':
-            return { icon: '🟢', text: 'Rientro confermato. Noleggio completato.' };
+            return { icon: '✅', text: 'Rientro confermato dal Hubber. Il deposito cauzionale è stato rilasciato.' };
         case 'DISPUTE_OPEN':
             return { icon: '⚠️', text: 'Disputa aperta. Il deposito cauzionale è stato bloccato.' };
+        case 'BOOKING_COMPLETED':
+             return { icon: '🏁', text: 'Noleggio completato con successo.' };
+        case 'DISPUTE_RESOLVED':
+            const { winner } = event.metadata || {};
+            if (winner === 'hubber') {
+                return { icon: '⚖️', text: 'Disputa risolta a favore del Hubber. Il deposito è stato catturato.' };
+            }
+            return { icon: '⚖️', text: 'Disputa risolta a favore del Renter. Il deposito è stato rilasciato.' };
         case 'REVIEW_WINDOW_OPEN':
             return { icon: '⭐', text: 'Ora puoi lasciare una recensione (hai 14 giorni di tempo).' };
         default:

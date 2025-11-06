@@ -1,5 +1,6 @@
 
 
+
 import React, { useState } from 'react';
 import { HubberDashboard } from './components/HubberDashboard';
 import { RenterDashboard } from './components/RenterDashboard';
@@ -10,6 +11,9 @@ import { PublicHeader } from './components/PublicHeader';
 import { AuthModal } from './components/AuthModal';
 import { SearchAndBook } from './components/SearchAndBook';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { CheckoutSuccessPage } from './components/checkout/CheckoutSuccessPage';
+import { CheckoutCancelPage } from './components/checkout/CheckoutCancelPage';
+import { PaymentProcessingPage } from './components/checkout/PaymentProcessingPage';
 
 
 const App: React.FC = () => {
@@ -17,6 +21,20 @@ const App: React.FC = () => {
   const [authModal, setAuthModal] = useState({ isOpen: false, mode: 'login' as 'login' | 'register' });
   const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS);
   const [favoritedItemIds, setFavoritedItemIds] = useState<Set<number>>(new Set([1])); // Favorite one by default for demo
+
+  // Client-side routing simulation
+  const urlParams = new URLSearchParams(window.location.search);
+  const page = urlParams.get('page');
+
+  if (page === 'checkout-success') {
+    return <CheckoutSuccessPage />;
+  }
+  if (page === 'checkout-cancel') {
+    return <CheckoutCancelPage />;
+  }
+  if (page === 'payment-processing') {
+    return <PaymentProcessingPage />;
+  }
 
   const openAuthModal = () => {
       setAuthModal({isOpen: true, mode: 'login'});
@@ -38,10 +56,25 @@ const App: React.FC = () => {
     });
   };
 
-  const handleBookingSuccess = (newBooking: Booking) => {
-      setBookings(prev => [...prev, newBooking]);
-      // Also update the global mock for consistency across the app if needed
-      MOCK_BOOKINGS.push(newBooking);
+  const handleBookingSuccess = (updatedBooking: Booking) => {
+      const bookingIndex = bookings.findIndex(b => b.id === updatedBooking.id);
+      const mockBookingIndex = MOCK_BOOKINGS.findIndex(b => b.id === updatedBooking.id);
+      
+      if (bookingIndex > -1) {
+          // Update existing booking in state
+          setBookings(prev => prev.map(b => b.id === updatedBooking.id ? updatedBooking : b));
+      } else {
+          // Add new booking to state
+          setBookings(prev => [...prev, updatedBooking]);
+      }
+
+      if (mockBookingIndex > -1) {
+          // Update global mock
+          MOCK_BOOKINGS[mockBookingIndex] = updatedBooking;
+      } else {
+          // Add to global mock
+          MOCK_BOOKINGS.push(updatedBooking);
+      }
   };
 
   const handleLogin = (email: string) => {

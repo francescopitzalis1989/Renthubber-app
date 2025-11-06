@@ -1,8 +1,11 @@
 import React from 'react';
-import type { Item, Category, Feature, Owner, Review, DetailedRatings, User, Booking, Thread, Dispute, BookingEvent, ChatTab, ThreadType, Withdrawal, Coupon, AuditLog, CMSPage, AutomatedEmail, SiteSettings } from './types';
+import type { Item, Category, Feature, Owner, Review, DetailedRatings, User, Booking, Thread, Dispute, BookingEvent, ChatTab, ThreadType, Withdrawal, Coupon, AuditLog, CMSPage, AutomatedEmail, SiteSettings, WebhookEvent } from './types';
 import { BellIcon, CalendarIcon, ChartBarIcon, ChatBubbleLeftRightIcon, Cog6ToothIcon, CreditCardIcon, DocumentChartBarIcon, DocumentMagnifyingGlassIcon, DocumentTextIcon, HeartIcon, InboxIcon, MagnifyingGlassIcon, PaperAirplaneIcon, ShieldCheckIcon, ShieldExclamationIcon, SparklesIcon, StarIcon, TagIcon, UserGroupIcon, WalletIcon } from './components/Icons';
 import { BookingStatus, DepositBookingStatus } from './types';
 
+export const PAYMENTS_CONFIG = {
+  useMocks: false, // Default to new behavior
+};
 
 // Nuove Icone per Categorie
 const EdiliIcon = <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>;
@@ -776,10 +779,19 @@ export let MOCK_SITE_SETTINGS: SiteSettings = {
     legalEmail: "legal@renthubber.com",
     phone: "+39 02 1234567",
     siteTitle: "Renthubber | Noleggia qualsiasi cosa, ovunque.",
-    siteDescription: "Un'applicazione per il noleggio di attrezzature che mostra articoli in affitto e utilizza Gemini per generare idee per progetti. Gli utenti possono sfogliare articoli, filtrare per categoria e ottenere idee personalizzate per i loro progetti.",
+    siteDescription: "Un'applicazione per il noleggio di attrezzature che mostra articoli in affitto e utilizza Gemini per generare idee per i loro progetti. Gli utenti possono sfogliare articoli, filtrare per categoria e ottenere idee personalizzate per i loro progetti.",
     metaKeywords: "noleggio, affitto, attrezzature, fai da te, eventi",
     allowIndexing: true,
     logoUrl: "https://via.placeholder.com/150x50.png?text=Renthubber",
     faviconUrl: "/vite.svg",
     appleTouchIconUrl: "https://via.placeholder.com/180.png?text=R",
 };
+
+export const MOCK_WEBHOOK_EVENTS: WebhookEvent[] = [
+  { id: 'evt_1', provider: 'Stripe', eventType: 'checkout.session.completed', timestamp: new Date(Date.now() - 1 * 60 * 1000).toISOString(), status: 'succeeded', relatedId: 'cs_123' },
+  { id: 'evt_2', provider: 'Stripe', eventType: 'payment_intent.succeeded', timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(), status: 'succeeded', relatedId: 'pi_123' },
+  { id: 'evt_3', provider: 'PayPal', eventType: 'PAYMENT.CAPTURE.COMPLETED', timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(), status: 'succeeded', relatedId: 'paypal_ord_456' },
+  { id: 'evt_4', provider: 'Stripe', eventType: 'charge.failed', timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(), status: 'failed', relatedId: 'ch_789' },
+  { id: 'evt_5', provider: 'Stripe', eventType: 'payment_intent.amount_capturable_updated', timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(), status: 'succeeded', relatedId: 'pi_abc' },
+  { id: 'evt_6', provider: 'PayPal', eventType: 'CHECKOUT.ORDER.APPROVED', timestamp: new Date(Date.now() - 20 * 60 * 1000).toISOString(), status: 'succeeded', relatedId: 'paypal_ord_def' },
+];

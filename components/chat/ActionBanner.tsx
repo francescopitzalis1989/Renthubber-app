@@ -12,6 +12,8 @@ interface ActionBannerProps {
   onStartGrace: () => void;
   onReminder: (hoursLeft: number) => void;
   onGraceEnd: () => void;
+  onDeclareReturn: () => void;
+  onConfirmReturn: () => void;
 }
 
 const ActionButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string; disabled?: boolean; }> = 
@@ -26,7 +28,8 @@ const ActionButton: React.FC<{ onClick: () => void; children: React.ReactNode; c
 );
 
 export const ActionBanner: React.FC<ActionBannerProps> = ({ 
-    booking, userRole, onPickup, onExtend, onStartGrace, onReminder, onGraceEnd 
+    booking, userRole, onPickup, onExtend, onStartGrace, onReminder, onGraceEnd,
+    onDeclareReturn, onConfirmReturn
 }) => {
     const { displayTime, isOverdue, inGrace } = useBookingTimer(booking, onReminder, onGraceEnd);
 
@@ -42,21 +45,31 @@ export const ActionBanner: React.FC<ActionBannerProps> = ({
 
                 return (
                     <div className="flex flex-col items-center gap-2">
-                        <div className="flex flex-col sm:flex-row items-center gap-2">
-                            <div className="flex items-center gap-2">
-                               <ActionButton onClick={() => onExtend(30)} className="bg-gray-200 hover:bg-gray-300">⏳ Aggiungi 30 min (€{computeExtensionCost(booking.item.price, 30).toFixed(2)})</ActionButton>
-                               <ActionButton onClick={() => onExtend(60)} className="bg-gray-200 hover:bg-gray-300">➕ Aggiungi 1 ora (€{computeExtensionCost(booking.item.price, 60).toFixed(2)})</ActionButton>
-                            </div>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                            <ActionButton onClick={() => onExtend(30)} className="bg-gray-200 hover:bg-gray-300">⏳ +30 min (€{computeExtensionCost(booking.item.price, 30).toFixed(2)})</ActionButton>
+                            <ActionButton onClick={() => onExtend(60)} className="bg-gray-200 hover:bg-gray-300">➕ +1 ora (€{computeExtensionCost(booking.item.price, 60).toFixed(2)})</ActionButton>
                             <ActionButton onClick={onStartGrace} disabled={!canStartGrace} className="bg-purple-100 text-purple-700 hover:bg-purple-200">🆓 Attiva tolleranza 1h</ActionButton>
+                            <ActionButton onClick={onDeclareReturn} className="bg-green-100 text-green-800 hover:bg-green-200">📦 Ho restituito l'oggetto</ActionButton>
                         </div>
                         {canStartGrace && <p className="text-xs text-gray-500 mt-1">La tolleranza è gratuita e valida per 60 minuti dopo la scadenza.</p>}
                     </div>
                 );
+            case BookingStatus.DELIVERED_BY_RENTER:
+                return <p className="text-sm font-semibold text-gray-600">In attesa della conferma di rientro da parte dell'Hubber.</p>
             default:
                 return null;
         }
     };
     
+    const renderHubberActions = () => {
+        switch (booking.status) {
+            case BookingStatus.DELIVERED_BY_RENTER:
+                return <ActionButton onClick={onConfirmReturn} className="bg-green-600 text-white hover:bg-green-700">✅ Conferma Rientro e Rilascia Deposito</ActionButton>;
+            default:
+                return null;
+        }
+    }
+
     const renderTimer = () => {
         if ([BookingStatus.PICKED_UP, BookingStatus.EXTENDED, BookingStatus.GRACE].includes(booking.status)) {
             const timerColor = isOverdue && !inGrace ? 'text-red-500' : 'text-gray-800';
@@ -82,7 +95,7 @@ export const ActionBanner: React.FC<ActionBannerProps> = ({
         return null;
     }
 
-    const actions = userRole === 'renter' ? renderRenterActions() : null;
+    const actions = userRole === 'renter' ? renderRenterActions() : renderHubberActions();
     const timer = renderTimer();
 
     if (!actions && !timer) return null;

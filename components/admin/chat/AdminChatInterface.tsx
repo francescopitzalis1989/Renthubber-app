@@ -160,6 +160,7 @@ export const AdminChatInterface: React.FC<AdminChatInterfaceProps> = ({ adminUse
     const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
     const [filter, setFilter] = useState<'all' | 'disputes' | 'support' | 'mine'>('all');
     const [newMessage, setNewMessage] = useState('');
+    const [toast, setToast] = useState({ show: false, message: '' });
 
     const isSupportAgent = adminUser.adminRoles?.includes('Support') && !adminUser.isAdmin;
 
@@ -201,6 +202,11 @@ export const AdminChatInterface: React.FC<AdminChatInterfaceProps> = ({ adminUse
             prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, newChatMessage] } : t)
         );
         setNewMessage('');
+
+        setToast({ show: true, message: 'Messaggio inviato!' });
+        setTimeout(() => {
+            setToast({ show: false, message: '' });
+        }, 3000);
     };
     
     const handleAssigneeChange = (threadId: number, assigneeId: number | null) => {
@@ -215,7 +221,12 @@ export const AdminChatInterface: React.FC<AdminChatInterfaceProps> = ({ adminUse
     };
     
     return (
-        <div className="bg-white rounded-lg shadow h-[calc(100vh-130px)] flex flex-col md:flex-row overflow-hidden">
+        <div className="bg-white rounded-lg shadow h-[calc(100vh-130px)] flex flex-col md:flex-row overflow-hidden relative">
+            {toast.show && (
+                <div className="absolute bottom-5 right-5 bg-gray-900 text-white px-5 py-3 rounded-lg shadow-lg z-[100]">
+                    {toast.message}
+                </div>
+            )}
             <div className={`flex flex-col h-full overflow-y-auto border-r w-full md:w-1/3 ${activeThreadId && 'hidden md:flex'}`}>
                 <div className="p-3 border-b flex items-center space-x-2 bg-gray-50 flex-wrap">
                     {isSupportAgent ? (

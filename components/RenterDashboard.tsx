@@ -1,11 +1,10 @@
 
 
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { User, BillingInfo, Booking, Review, Item } from '../types';
 import { Header } from './Header';
 // FIX: Import MOCK_THREADS to resolve 'Cannot find name' error.
-import { RENTER_DASHBOARD_LINKS, MOCK_ALL_REVIEWS, MOCK_USERS, MOCK_ITEMS, MOCK_THREADS } from '../constants';
+import { RENTER_DASHBOARD_LINKS, MOCK_ALL_REVIEWS, MOCK_USERS, MOCK_ITEMS, MOCK_THREADS, MOCK_BOOKINGS } from '../constants';
 import { SearchAndBook } from './SearchAndBook';
 import { ChatInterface } from './ChatInterface';
 import { BookingsList } from './bookings/BookingsList';
@@ -355,8 +354,31 @@ export const RenterDashboard: React.FC<RenterDashboardProps> = ({ user, bookings
     const [initialThreadId, setInitialThreadId] = useState<number | null>(null);
     const [localBookings, setLocalBookings] = useState(bookings);
     const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+    const localBookingsRef = useRef(localBookings);
 
     const [reviewModal, setReviewModal] = useState<{isOpen: boolean, booking: Booking | null}>({isOpen: false, booking: null});
+
+    useEffect(() => {
+        setLocalBookings(bookings);
+    }, [bookings]);
+
+    // Polling for real-time updates
+    useEffect(() => {
+        localBookingsRef.current = localBookings;
+    }, [localBookings]);
+
+    useEffect(() => {
+        const pollInterval = setInterval(() => {
+            // In a real app, this would be an API call.
+            // Here, we sync with the global mock array which is mutated by "webhooks".
+            if (JSON.stringify(localBookingsRef.current) !== JSON.stringify(MOCK_BOOKINGS)) {
+                console.log("Polling (Renter): Detected booking changes. Updating dashboard state.");
+                setLocalBookings([...MOCK_BOOKINGS]);
+            }
+        }, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(pollInterval);
+    }, []); // Empty dependency array ensures this runs only once on mount
 
     const handleSetActiveSection = (section: string) => {
         setActiveSection(section);

@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { User, Item, Review, BillingInfo, Booking, Withdrawal } from '../types';
 import { Header } from './Header';
@@ -801,12 +800,33 @@ export const HubberDashboard: React.FC<HubberDashboardProps> = ({ user, bookings
     const [itemToEdit, setItemToEdit] = useState<Item | null>(null);
     const [localBookings, setLocalBookings] = useState(bookings);
     const [withdrawals, setWithdrawals] = useState(MOCK_WITHDRAWALS);
+    const localBookingsRef = useRef(localBookings);
+
 
     const [reviewModal, setReviewModal] = useState<{isOpen: boolean, booking: Booking | null}>({isOpen: false, booking: null});
 
     useEffect(() => {
         setLocalBookings(bookings);
     }, [bookings]);
+
+    // Polling for real-time updates
+    useEffect(() => {
+        localBookingsRef.current = localBookings;
+    }, [localBookings]);
+
+    useEffect(() => {
+        const pollInterval = setInterval(() => {
+            // In a real app, this would be an API call.
+            // Here, we sync with the global mock array which is mutated by "webhooks".
+            if (JSON.stringify(localBookingsRef.current) !== JSON.stringify(MOCK_BOOKINGS)) {
+                console.log("Polling (Hubber): Detected booking changes. Updating dashboard state.");
+                setLocalBookings([...MOCK_BOOKINGS]);
+            }
+        }, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(pollInterval);
+    }, []); // Empty dependency array ensures this runs only once on mount
+
 
     const handleSetActiveSection = (section: string) => {
         setActiveSection(section);

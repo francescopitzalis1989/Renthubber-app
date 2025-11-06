@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User, Thread, ChatTab, ChatMessage, BookingEvent, Booking, Dispute, UserRole, DisputeType } from '../types';
 import { MOCK_THREADS, MOCK_EVENTS, MOCK_BOOKINGS, MOCK_DISPUTES, threadTypeToChatTabMap } from '../constants';
@@ -8,9 +7,9 @@ import { SystemMessage } from './chat/SystemMessage';
 import { getMessageForEvent, formatChatTimestamp } from '../utils/systemMessages';
 import { addMinutes } from '../utils/datetime';
 import { computeExtensionCost } from '../utils/pricing';
-import { chargeForExtension } from '../api/payments';
+import { chargeForExtension, cancelDeposit } from '../api/payments';
 import { DisputeModal } from './disputes/DisputeModal';
-import { BookingStatus } from '../types';
+import { BookingStatus, DepositBookingStatus } from '../types';
 import { ActionBanner } from './chat/ActionBanner';
 import { PaperClipIcon, DocumentTextIcon } from './Icons';
 
@@ -25,6 +24,157 @@ type TimelineItem =
     | { type: 'message'; data: ChatMessage }
     | { type: 'event'; data: BookingEvent; message: { icon: string; text: string } };
 
+// --- Active Chat Window Component ---
+
+interface ActiveChatProps {
+    activeThread: Thread | undefined;
+    user: User;
+    timeline: TimelineItem[];
+    activeBooking: Booking | undefined;
+    canOpenDispute: boolean;
+    handleOpenDispute: (booking: Booking) => void;
+    handlePickup: (booking: Booking) => void;
+    handleExtend: (booking: Booking, minutes: number) => void;
+    handleStartGrace: (booking: Booking) => void;
+    handleReminder: (booking: Booking, hoursLeft: number) => void;
+    handleGraceEnd: (booking: Booking) => void;
+    handleDeclareReturn: (booking: Booking) => void;
+    handleConfirmReturn: (booking: Booking) => void;
+    newMessage: string;
+    setNewMessage: (value: string) => void;
+    handleSendMessage: (e: React.FormEvent) => void;
+    handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    fileInputRef: React.RefObject<HTMLInputElement>;
+    setActiveThreadId: (id: number | null) => void;
+}
+
+const ActiveChat: React.FC<ActiveChatProps> = ({
+    activeThread, user, timeline, activeBooking, canOpenDispute, handleOpenDispute,
+    handlePickup, handleExtend, handleStartGrace, handleReminder, handleGraceEnd,
+    handleDeclareReturn, handleConfirmReturn,
+    newMessage, setNewMessage, handleSendMessage, handleFileUpload, fileInputRef, setActiveThreadId
+}) => {
+    const messagesEndRef = useRef<null | HTMLDivElement>(null);
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+        if (activeThread) {
+            scrollToBottom();
+        }
+    }, [activeThread, timeline]);
+
+    if (!activeThread) {
+        return (
+           <div className="hidden md:flex items-center justify-center w-2/3 h-full text-gray-500">
+               <p>Seleziona una conversazione per iniziare a chattare.</p>
+           </div>
+       );
+   }
+
+    return (
+        <main className="w-full md:w-2/3 flex flex-col h-full bg-white">
+            <header className="p-4 border-b flex items-center space-x-4">
+                 <button onClick={() => setActiveThreadId(null)} className="md:hidden p-2 rounded-full hover:bg-gray-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                    </svg>
+                </button>
+                <img src={activeThread.item.imageUrl} alt={activeThread.item.title} className="w-14 h-14 object-cover rounded-lg" />
+                <div className="flex-grow">
+                    <p className="font-bold">{activeThread.participant.name}</p>
+                    <p className="text-sm text-gray-600">{activeThread.item.title}</p>
+                </div>
+                 {canOpenDispute && activeBooking && (
+                    <button 
+                        onClick={() => handleOpenDispute(activeBooking)}
+                        className="text-xs font-semibold text-red-600 border border-red-200 rounded-full px-3 py-1 hover:bg-red-50"
+                    >
+                        Apri contestazione
+                    </button>
+                )}
+            </header>
+
+            {activeBooking && (
+                <ActionBanner 
+                    booking={activeBooking}
+                    userRole={user.currentRole}
+                    onPickup={() => handlePickup(activeBooking)}
+                    onExtend={(minutes) => handleExtend(activeBooking, minutes)}
+                    onStartGrace={() => handleStartGrace(activeBooking)}
+                    onReminder={(hours) => handleReminder(activeBooking, hours)}
+                    onGraceEnd={() => handleGraceEnd(activeBooking)}
+                    onDeclareReturn={() => handleDeclareReturn(activeBooking)}
+                    onConfirmReturn={() => handleConfirmReturn(activeBooking)}
+                />
+            )}
+
+            <div className="flex-grow p-6 overflow-y-auto bg-gray-50">
+                <div>
+                    {timeline.map((item, index) => {
+                        if (item.type === 'event') {
+                            return (
+                                <SystemMessage
+                                    key={`event-${item.data.action}-${index}`}
+                                    icon={item.message.icon}
+                                    text={item.message.text}
+                                    timestamp={item.data.timestamp}
+                                />
+                            );
+                        }
+                        
+                        const message = item.data;
+                        return (
+                            <div key={message.id} className={`flex items-end gap-2 my-2 ${message.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
+                                {message.senderId !== user.id && (
+                                    <img src={activeThread.participant.avatarUrl} alt={activeThread.participant.name} className="w-6 h-6 rounded-full"/>
+                                )}
+                                <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-2xl ${message.senderId === user.id ? 'bg-brand-blue text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'}`}>
+                                    <div className="text-sm space-y-2">
+                                        {message.file && (
+                                            message.file.type === 'image' ? (
+                                                <img src={message.file.url} alt={message.file.name} className="rounded-lg max-w-xs cursor-pointer" onClick={() => window.open(message.file.url, '_blank')} />
+                                            ) : (
+                                                <a href={message.file.url} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 bg-gray-100 p-2 rounded-lg text-gray-700 hover:bg-gray-200">
+                                                    <DocumentTextIcon className="w-5 h-5 flex-shrink-0" />
+                                                    <span className="truncate">{message.file.name}</span>
+                                                </a>
+                                            )
+                                        )}
+                                        {message.text && <p>{message.text}</p>}
+                                    </div>
+                                    <p className={`text-xs mt-1 ${message.senderId === user.id ? 'text-blue-200 text-right' : 'text-gray-500 text-left'}`}>{formatChatTimestamp(message.timestamp)}</p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <div ref={messagesEndRef} />
+                </div>
+            </div>
+
+            <footer className="p-4 border-t bg-white">
+                <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
+                     <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,application/pdf" />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-500 hover:text-brand-blue rounded-full hover:bg-gray-100 transition-colors">
+                        <PaperClipIcon className="w-6 h-6" />
+                    </button>
+                    <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Scrivi un messaggio..."
+                        className="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-brand-blue focus:outline-none"
+                    />
+                    <button type="submit" className="bg-brand-blue text-white rounded-full p-3 hover:bg-teal-800 transition-colors disabled:bg-gray-300" disabled={!newMessage.trim()}>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" /></svg>
+                    </button>
+                </form>
+            </footer>
+        </main>
+    );
+};
+
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, initialThreadId, onThreadOpened }) => {
     const [threads, setThreads] = useState<Thread[]>(MOCK_THREADS);
@@ -33,10 +183,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, initialThrea
     const [disputes, setDisputes] = useState(MOCK_DISPUTES);
     const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
     const [newMessage, setNewMessage] = useState('');
-    const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [activeTab, setActiveTab] = useState<ChatTab>('all');
     const [disputeModalInfo, setDisputeModalInfo] = useState<{ isOpen: boolean; booking: Booking | null }>({ isOpen: false, booking: null });
+    const [toast, setToast] = useState({ show: false, message: '' });
 
     // Handle initial thread selection from props
     useEffect(() => {
@@ -101,18 +251,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, initialThrea
             setActiveThreadId(filteredThreads[0].id);
         }
     }, [filteredThreads, activeThreadId]);
-
-    const activeThread = threads.find(t => t.id === activeThreadId);
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(() => {
-        if (activeThread) {
-            scrollToBottom();
-        }
-    }, [activeThread, activeThreadId, threads]);
     
     const createAndSetEvent = (booking: Booking, action: string, newState: BookingStatus, metadata?: Record<string, any>) => {
          const newEvent: BookingEvent = {
@@ -150,6 +288,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, initialThrea
 
         addMessageToThread(newChatMessage);
         setNewMessage('');
+        
+        setToast({ show: true, message: 'Messaggio inviato!' });
+        setTimeout(() => {
+            setToast({ show: false, message: '' });
+        }, 3000);
     };
     
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,6 +430,41 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, initialThrea
      const handleGraceEnd = (booking: Booking) => {
         createAndSetEvent(booking, 'GRACE_ENDED', booking.status);
     };
+    
+    const handleDeclareReturn = (booking: Booking) => {
+        const newState = BookingStatus.DELIVERED_BY_RENTER;
+        setBookings(prev => prev.map(b => b.id === booking.id ? {...b, status: newState, returnedAt: new Date().toISOString()} : b));
+        createAndSetEvent(booking, 'DELIVERED_BY_RENTER', newState);
+    };
+
+    const handleConfirmReturn = async (booking: Booking) => {
+        if (booking.depositPaymentIntentId) {
+            await cancelDeposit(booking.depositPaymentIntentId);
+        }
+        const returnConfirmedState = BookingStatus.RETURN_CONFIRMED_BY_HUBBER;
+        const completedState = BookingStatus.COMPLETED;
+
+        // Update to RETURN_CONFIRMED_BY_HUBBER and create event
+        setBookings(prev => prev.map(b => b.id === booking.id ? {
+            ...b, 
+            status: returnConfirmedState, 
+            depositStatus: DepositBookingStatus.RELEASED
+        } : b));
+        createAndSetEvent(booking, 'RETURN_CONFIRMED_BY_HUBBER', returnConfirmedState);
+
+        // After a short delay, update to COMPLETED and create another event
+        setTimeout(() => {
+            setBookings(prev => prev.map(b => b.id === booking.id ? {
+                ...b, 
+                status: completedState,
+            } : b));
+            
+            // Create the event using the booking state *before* it was set to COMPLETED
+            const bookingBeforeComplete = { ...booking, status: returnConfirmedState };
+            createAndSetEvent(bookingBeforeComplete, 'BOOKING_COMPLETED', completedState);
+        }, 1500); // 1.5 second delay to simulate final processing
+    };
+
 
     const handleThreadSelect = (id: number) => {
         setActiveThreadId(id);
@@ -299,154 +477,48 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, initialThrea
             );
         }
     };
+    
+    const activeThread = threads.find(t => t.id === activeThreadId);
 
+    const timeline = useMemo(() => {
+        if (!activeThread) return [];
 
-    const ActiveChat = () => {
-        const timeline = useMemo(() => {
-            if (!activeThread) return [];
+        const messageItems: TimelineItem[] = activeThread.messages.map(m => ({
+            type: 'message',
+            data: m,
+        }));
 
-            const messageItems: TimelineItem[] = activeThread.messages.map(m => ({
-                type: 'message',
-                data: m,
-            }));
+        const eventItems: TimelineItem[] = events
+            .filter(event => event.bookingId === activeThread.bookingId)
+            .map(event => ({ event, message: getMessageForEvent(event, user.currentRole) }))
+            .filter(item => item.message !== null)
+            .map(item => ({ type: 'event', data: item.event, message: item.message! }));
 
-            const eventItems: TimelineItem[] = events
-                .filter(event => event.bookingId === activeThread.bookingId)
-                .map(event => ({ event, message: getMessageForEvent(event, user.currentRole) }))
-                .filter(item => item.message !== null)
-                .map(item => ({ type: 'event', data: item.event, message: item.message! }));
+        const combined = [...messageItems, ...eventItems];
+        
+        combined.sort((a, b) => new Date(a.data.timestamp).getTime() - new Date(b.data.timestamp).getTime());
 
-            const combined = [...messageItems, ...eventItems];
-            
-            combined.sort((a, b) => new Date(a.data.timestamp).getTime() - new Date(b.data.timestamp).getTime());
+        return combined;
+    }, [activeThread, events, user.currentRole]);
 
-            return combined;
-        }, [activeThread, events, user.currentRole]);
+    const activeBooking = useMemo(() => 
+        bookings.find(b => b.id === activeThread?.bookingId),
+    [bookings, activeThread]);
 
-
-        const activeBooking = useMemo(() => 
-            bookings.find(b => b.id === activeThread?.bookingId),
-        [bookings, activeThread]);
-
-        const canOpenDispute = activeBooking && ![
-            BookingStatus.PENDING,
-            BookingStatus.COMPLETED,
-            BookingStatus.DISPUTE_OPEN,
-            BookingStatus.CANCELLED
-        ].includes(activeBooking.status);
-
-
-        if (!activeThread) {
-             return (
-                <div className="hidden md:flex items-center justify-center w-2/3 h-full text-gray-500">
-                    <p>Seleziona una conversazione per iniziare a chattare.</p>
-                </div>
-            );
-        }
-
-        return (
-            <main className="w-full md:w-2/3 flex flex-col h-full bg-white">
-                <header className="p-4 border-b flex items-center space-x-4">
-                     <button onClick={() => setActiveThreadId(null)} className="md:hidden p-2 rounded-full hover:bg-gray-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                        </svg>
-                    </button>
-                    <img src={activeThread.item.imageUrl} alt={activeThread.item.title} className="w-14 h-14 object-cover rounded-lg" />
-                    <div className="flex-grow">
-                        <p className="font-bold">{activeThread.participant.name}</p>
-                        <p className="text-sm text-gray-600">{activeThread.item.title}</p>
-                    </div>
-                     {canOpenDispute && activeBooking && (
-                        <button 
-                            onClick={() => handleOpenDispute(activeBooking)}
-                            className="text-xs font-semibold text-red-600 border border-red-200 rounded-full px-3 py-1 hover:bg-red-50"
-                        >
-                            Apri contestazione
-                        </button>
-                    )}
-                </header>
-
-                {activeBooking && (
-                    <ActionBanner 
-                        booking={activeBooking}
-                        userRole={user.currentRole}
-                        onPickup={() => handlePickup(activeBooking)}
-                        onExtend={(minutes) => handleExtend(activeBooking, minutes)}
-                        onStartGrace={() => handleStartGrace(activeBooking)}
-                        onReminder={(hours) => handleReminder(activeBooking, hours)}
-                        onGraceEnd={() => handleGraceEnd(activeBooking)}
-                    />
-                )}
-
-                <div className="flex-grow p-6 overflow-y-auto bg-gray-50">
-                    <div>
-                        {timeline.map((item, index) => {
-                            if (item.type === 'event') {
-                                return (
-                                    <SystemMessage
-                                        key={`event-${item.data.action}-${index}`}
-                                        icon={item.message.icon}
-                                        text={item.message.text}
-                                        timestamp={item.data.timestamp}
-                                    />
-                                );
-                            }
-                            
-                            const message = item.data;
-                            return (
-                                <div key={message.id} className={`flex items-end gap-2 my-2 ${message.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
-                                    {message.senderId !== user.id && (
-                                        <img src={activeThread.participant.avatarUrl} alt={activeThread.participant.name} className="w-6 h-6 rounded-full"/>
-                                    )}
-                                    <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-2xl ${message.senderId === user.id ? 'bg-brand-blue text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'}`}>
-                                        <div className="text-sm space-y-2">
-                                            {message.file && (
-                                                message.file.type === 'image' ? (
-                                                    <img src={message.file.url} alt={message.file.name} className="rounded-lg max-w-xs cursor-pointer" onClick={() => window.open(message.file.url, '_blank')} />
-                                                ) : (
-                                                    <a href={message.file.url} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 bg-gray-100 p-2 rounded-lg text-gray-700 hover:bg-gray-200">
-                                                        <DocumentTextIcon className="w-5 h-5 flex-shrink-0" />
-                                                        <span className="truncate">{message.file.name}</span>
-                                                    </a>
-                                                )
-                                            )}
-                                            {message.text && <p>{message.text}</p>}
-                                        </div>
-                                        <p className={`text-xs mt-1 ${message.senderId === user.id ? 'text-blue-200 text-right' : 'text-gray-500 text-left'}`}>{formatChatTimestamp(message.timestamp)}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        <div ref={messagesEndRef} />
-                    </div>
-                </div>
-
-                <footer className="p-4 border-t bg-white">
-                    <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
-                         <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,application/pdf" />
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-500 hover:text-brand-blue rounded-full hover:bg-gray-100 transition-colors">
-                            <PaperClipIcon className="w-6 h-6" />
-                        </button>
-                        <input
-                            type="text"
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="Scrivi un messaggio..."
-                            className="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-brand-blue focus:outline-none"
-                        />
-                        <button type="submit" className="bg-brand-blue text-white rounded-full p-3 hover:bg-teal-800 transition-colors disabled:bg-gray-300" disabled={!newMessage.trim()}>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" /></svg>
-                        </button>
-                    </form>
-                </footer>
-            </main>
-        );
-    }
-
+    const canOpenDispute = useMemo(() => activeBooking && ![
+        BookingStatus.PENDING,
+        BookingStatus.COMPLETED,
+        BookingStatus.DISPUTE_OPEN,
+        BookingStatus.CANCELLED
+    ].includes(activeBooking.status), [activeBooking]);
 
     return (
-        <div className="bg-white rounded-xl border border-gray-200 h-[calc(100vh-140px)] md:h-[calc(100vh-180px)] flex">
+        <div className="bg-white rounded-xl border border-gray-200 h-[calc(100vh-140px)] md:h-[calc(100vh-180px)] flex relative">
+            {toast.show && (
+                <div className="fixed bottom-20 right-5 bg-gray-900 text-white px-5 py-3 rounded-lg shadow-lg z-[100]">
+                    {toast.message}
+                </div>
+            )}
             <aside className={`h-full overflow-y-auto border-r w-full md:w-1/3 ${activeThreadId && 'hidden md:block'}`}>
                 <div className="p-4 border-b">
                     <h2 className="text-xl font-bold">Messaggi</h2>
@@ -473,7 +545,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, initialThrea
                     bookings={bookings}
                 />
             </aside>
-           <ActiveChat />
+           <ActiveChat
+                activeThread={activeThread}
+                user={user}
+                timeline={timeline}
+                activeBooking={activeBooking}
+                canOpenDispute={!!canOpenDispute}
+                handleOpenDispute={handleOpenDispute}
+                handlePickup={handlePickup}
+                handleExtend={handleExtend}
+                handleStartGrace={handleStartGrace}
+                handleReminder={handleReminder}
+                handleGraceEnd={handleGraceEnd}
+                handleDeclareReturn={handleDeclareReturn}
+                handleConfirmReturn={handleConfirmReturn}
+                newMessage={newMessage}
+                setNewMessage={setNewMessage}
+                handleSendMessage={handleSendMessage}
+                handleFileUpload={handleFileUpload}
+                fileInputRef={fileInputRef}
+                setActiveThreadId={setActiveThreadId}
+            />
             {disputeModalInfo.isOpen && disputeModalInfo.booking && (
                 <DisputeModal
                     isOpen={disputeModalInfo.isOpen}

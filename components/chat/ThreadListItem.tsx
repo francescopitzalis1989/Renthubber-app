@@ -7,6 +7,10 @@ import { formatListTimestamp } from '../../utils/systemMessages';
 // Helper to get status chip styles and text
 const getBookingStatusChip = (status: BookingStatus) => {
     const statusMap: { [key in BookingStatus]: { text: string; className: string } } = {
+        [BookingStatus.PAYMENT_PENDING]: { text: 'Pagamento...', className: 'bg-yellow-100 text-yellow-800' },
+        [BookingStatus.PAYMENT_FAILED]: { text: 'Fallito', className: 'bg-red-100 text-red-800' },
+        [BookingStatus.PAYMENT_SUCCEEDED]: { text: 'Pagato', className: 'bg-blue-100 text-blue-800' },
+        [BookingStatus.DEPOSIT_AUTHORIZED]: { text: 'Confermando', className: 'bg-blue-100 text-blue-800' },
         [BookingStatus.PENDING]: { text: 'Richiesta', className: 'bg-yellow-100 text-yellow-800' },
         [BookingStatus.CONFIRMED]: { text: 'Confermata', className: 'bg-green-100 text-green-800' },
         [BookingStatus.PICKED_UP]: { text: 'Ritiro Effettuato', className: 'bg-blue-100 text-blue-800' },
